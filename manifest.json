@@ -1,13 +1,13 @@
 {
-  "name": "FinanceTracker",
-  "short_name": "Finance",
-  "description": "Track expenses, debt, and investments. All data stays on your device.",
+  "name": "WLTH - Wealth Intelligence",
+  "short_name": "WLTH",
+  "description": "Modern wealth intelligence dashboard with stunning visualizations",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#f8fafc",
-  "theme_color": "#0f172a",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
   "icons": [
     {
       "src": "icon-192.png",
