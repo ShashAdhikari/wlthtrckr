@@ -348,6 +348,105 @@
         }
     };
 
+    // ==================== CONFETTI ====================
+    const Confetti = {
+        fire(x = 0.5, y = 0.5) {
+            if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const colors = ['#00ff88', '#4facfe', '#a855f7', '#fbbf24', '#ff4757'];
+            const container = document.createElement('div');
+            container.className = 'confetti-container';
+            container.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;`;
+            document.body.appendChild(container);
+            const count = 80;
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'confetti-piece';
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const size = 6 + Math.random() * 8;
+                const startX = x * innerWidth + (Math.random() - 0.5) * 60;
+                const startY = y * innerHeight;
+                const angle = -90 + (Math.random() - 0.5) * 90;
+                const velocity = 400 + Math.random() * 400;
+                const rotation = Math.random() * 360;
+                const rotSpeed = (Math.random() - 0.5) * 720;
+                p.style.cssText = `
+                    position:absolute;left:${startX}px;top:${startY}px;
+                    width:${size}px;height:${size * 0.6}px;
+                    background:${color};border-radius:2px;
+                    transform:rotate(${rotation}deg);opacity:1;
+                `;
+                container.appendChild(p);
+                if (hasGSAP()) {
+                    const rad = angle * Math.PI / 180;
+                    const vx = Math.cos(rad) * velocity;
+                    const vy = Math.sin(rad) * velocity;
+                    gsap.to(p, {
+                        x: vx * 0.8,
+                        y: vy * 0.8 + 600,
+                        rotation: rotation + rotSpeed,
+                        opacity: 0,
+                        duration: 2 + Math.random(),
+                        ease: 'power2.out',
+                        delay: i * 0.008
+                    });
+                }
+            }
+            setTimeout(() => container.remove(), 4000);
+        },
+        celebrate(reason) {
+            this.fire(0.5, 0.4);
+            Background3D.burst();
+            Toast.show(reason || '🎉 Milestone reached!');
+        }
+    };
+
+    // ==================== KEYBOARD SHORTCUTS ====================
+    const Keyboard = {
+        sections: ['dashboard', 'portfolio', 'debt', 'analytics', 'transactions', 'import'],
+        currentIndex: 0,
+        init() {
+            addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+                if (e.metaKey || e.ctrlKey) return;
+                switch (e.key.toLowerCase()) {
+                    case 'j': this.navigate(1); break;
+                    case 'k': this.navigate(-1); break;
+                    case 'n': e.preventDefault(); Modal.open('expense'); break;
+                    case 'i': e.preventDefault(); Modal.open('income'); break;
+                    case '/': e.preventDefault(); document.getElementById('tx-search')?.focus(); break;
+                    case '?': this.showHelp(); break;
+                }
+            });
+        },
+        navigate(delta) {
+            this.currentIndex = Math.max(0, Math.min(this.sections.length - 1, this.currentIndex + delta));
+            const section = document.getElementById(this.sections[this.currentIndex]);
+            section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Update nav
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + this.sections[this.currentIndex]));
+        },
+        showHelp() {
+            const existing = document.querySelector('.keyboard-help');
+            if (existing) { existing.remove(); return; }
+            const el = document.createElement('div');
+            el.className = 'keyboard-help glass';
+            el.innerHTML = `
+                <h4>Keyboard Shortcuts</h4>
+                <div class="kb-row"><kbd>J</kbd><span>Next section</span></div>
+                <div class="kb-row"><kbd>K</kbd><span>Previous section</span></div>
+                <div class="kb-row"><kbd>N</kbd><span>New expense</span></div>
+                <div class="kb-row"><kbd>I</kbd><span>New income</span></div>
+                <div class="kb-row"><kbd>/</kbd><span>Search transactions</span></div>
+                <div class="kb-row"><kbd>Esc</kbd><span>Close modal</span></div>
+                <button class="kb-close" aria-label="Close">&times;</button>
+            `;
+            document.body.appendChild(el);
+            el.querySelector('.kb-close').addEventListener('click', () => el.remove());
+            requestAnimationFrame(() => el.classList.add('visible'));
+            setTimeout(() => { if (el.parentNode) el.remove(); }, 8000);
+        }
+    };
+
     // ==================== TICKER ====================
     const Ticker = {
         quotes: [
@@ -386,9 +485,10 @@
         }
     };
 
-    // ==================== THREE.JS BG ====================
+    // ==================== THREE.JS BG (Mouse-responsive parallax) ====================
     const Background3D = {
         rafId: null,
+        mouse: { x: 0, y: 0, tx: 0, ty: 0 },
         init() {
             if (!hasTHREE()) return;
             const canvas = document.getElementById('bg-canvas');
@@ -401,7 +501,7 @@
                 this.renderer.setSize(innerWidth, innerHeight);
                 this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
                 const geo = new THREE.BufferGeometry();
-                const count = 1800, pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
+                const count = 2000, pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
                 const pal = [[0,1,0.53],[0.31,0.67,1],[0.66,0.33,0.97]];
                 for (let i = 0; i < count * 3; i += 3) {
                     pos[i] = (Math.random()-0.5)*100; pos[i+1] = (Math.random()-0.5)*100; pos[i+2] = (Math.random()-0.5)*100;
@@ -411,10 +511,25 @@
                 geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
                 this.particles = new THREE.Points(geo, new THREE.PointsMaterial({ size:0.5, vertexColors:true, transparent:true, opacity:0.6, sizeAttenuation:true }));
                 this.scene.add(this.particles);
-                const loop = () => { this.rafId = requestAnimationFrame(loop);
-                    this.particles.rotation.x += 0.0002; this.particles.rotation.y += 0.0003;
-                    this.renderer.render(this.scene, this.camera); };
+                const loop = () => {
+                    this.rafId = requestAnimationFrame(loop);
+                    // Smooth mouse follow
+                    this.mouse.x += (this.mouse.tx - this.mouse.x) * 0.05;
+                    this.mouse.y += (this.mouse.ty - this.mouse.y) * 0.05;
+                    // Rotate based on mouse + constant drift
+                    this.particles.rotation.x += 0.0002 + this.mouse.y * 0.0001;
+                    this.particles.rotation.y += 0.0003 + this.mouse.x * 0.0001;
+                    // Subtle camera shift for parallax depth
+                    this.camera.position.x = this.mouse.x * 2;
+                    this.camera.position.y = this.mouse.y * 2;
+                    this.camera.lookAt(0, 0, 0);
+                    this.renderer.render(this.scene, this.camera);
+                };
                 loop();
+                addEventListener('mousemove', (e) => {
+                    this.mouse.tx = (e.clientX / innerWidth - 0.5) * 10;
+                    this.mouse.ty = (e.clientY / innerHeight - 0.5) * 10;
+                });
                 addEventListener('resize', () => {
                     if (!this.renderer) return;
                     this.camera.aspect = innerWidth/innerHeight; this.camera.updateProjectionMatrix();
@@ -423,6 +538,26 @@
             } catch (e) {
                 if (this.rafId) cancelAnimationFrame(this.rafId);
                 if (canvas) canvas.style.display = 'none';
+            }
+        },
+        // Burst effect for celebrations
+        burst() {
+            if (!this.particles) return;
+            const pos = this.particles.geometry.attributes.position.array;
+            const orig = pos.slice();
+            // Explode outward
+            for (let i = 0; i < pos.length; i += 3) {
+                pos[i] *= 1.5; pos[i+1] *= 1.5; pos[i+2] *= 1.5;
+            }
+            this.particles.geometry.attributes.position.needsUpdate = true;
+            // Animate back
+            if (hasGSAP()) {
+                gsap.to({}, { duration: 1.5, onUpdate: function() {
+                    const p = this.progress();
+                    const ease = 1 - Math.pow(1 - p, 3);
+                    for (let i = 0; i < pos.length; i++) pos[i] = orig[i] * 1.5 + (orig[i] - orig[i] * 1.5) * ease;
+                    Background3D.particles.geometry.attributes.position.needsUpdate = true;
+                }});
             }
         }
     };
@@ -570,13 +705,50 @@
         hero() {
             if (!hasGSAP()) return;
             try {
-                gsap.timeline()
-                    .from('.hero-badge', { opacity: 0, y: 30, duration: 0.6 })
-                    .from('.hero-title .title-line', { opacity: 0, y: 50, stagger: 0.2, duration: 0.8 }, '-=0.3')
-                    .from('.hero-subtitle', { opacity: 0, y: 30, duration: 0.6 }, '-=0.4')
-                    .from('.net-worth-display', { opacity: 0, y: 40, scale: 0.96, duration: 0.8 }, '-=0.3')
-                    .from('.hero-cta', { opacity: 0, y: 20, duration: 0.5 }, '-=0.3');
-            } catch (e) {}
+                // Dramatic hero entrance sequence
+                const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+                // Set initial states
+                gsap.set('.hero-badge', { opacity: 0, y: 40, scale: 0.8 });
+                gsap.set('.hero-title .title-line', { opacity: 0, y: 80, rotateX: 40 });
+                gsap.set('.hero-subtitle', { opacity: 0, y: 30 });
+                gsap.set('.net-worth-display', { opacity: 0, y: 60, scale: 0.9 });
+                gsap.set('.net-worth-value .amount', { opacity: 0, scale: 0.5 });
+                gsap.set('.hero-cta', { opacity: 0, y: 30 });
+                gsap.set('.scroll-indicator', { opacity: 0, y: 20 });
+
+                tl
+                    // Badge drops in with pop
+                    .to('.hero-badge', { opacity: 1, y: 0, scale: 1, duration: 0.6 })
+                    // Title lines sweep in with perspective
+                    .to('.hero-title .title-line', {
+                        opacity: 1, y: 0, rotateX: 0,
+                        stagger: 0.15, duration: 0.9
+                    }, '-=0.3')
+                    // Subtitle fades in
+                    .to('.hero-subtitle', { opacity: 1, y: 0, duration: 0.6 }, '-=0.5')
+                    // Net worth card rises with spring
+                    .to('.net-worth-display', {
+                        opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'back.out(1.2)'
+                    }, '-=0.3')
+                    // Amount pops with counter animation
+                    .to('.net-worth-value .amount', {
+                        opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(2)'
+                    }, '-=0.4')
+                    // CTA buttons
+                    .to('.hero-cta', { opacity: 1, y: 0, duration: 0.5 }, '-=0.2')
+                    // Scroll indicator
+                    .to('.scroll-indicator', { opacity: 1, y: 0, duration: 0.4 }, '-=0.1');
+
+                // Particle burst after hero loads
+                setTimeout(() => {
+                    if (Background3D.particles) {
+                        // Gentle zoom-in effect
+                        gsap.from(Background3D.particles.scale, { x: 0.7, y: 0.7, z: 0.7, duration: 2, ease: 'power2.out' });
+                    }
+                }, 200);
+
+            } catch (e) { console.warn('Hero animation failed:', e); }
         },
         scroll() {
             if (!window.ScrollTrigger) return;
@@ -708,6 +880,11 @@
 
             if (!name || !(amount > 0)) { Toast.show('Enter a name and a valid amount', 'error'); return; }
 
+            // Capture state before adding for milestone detection
+            const prevNetWorth = Calc.netWorth();
+            const isFirstEntry = Store.data.transactions.length === 0 && Store.data.investments.length === 0;
+            const prevDebtCount = Store.data.debts.length;
+
             if (kind === 'expense' || kind === 'income') {
                 Store.add('transactions', { id: uid(), description: name, amount, category: document.getElementById('f-category').value, date, type: kind });
             } else if (kind === 'investment') {
@@ -720,7 +897,24 @@
             }
             this.close();
             UI.refresh();
-            Toast.show(capitalize(kind) + ' saved');
+
+            // Milestone celebrations
+            const newNetWorth = Calc.netWorth();
+            const milestones = [10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+            const crossedMilestone = milestones.find(m => prevNetWorth < m && newNetWorth >= m);
+
+            if (isFirstEntry) {
+                setTimeout(() => Confetti.celebrate('🚀 Welcome! Your wealth journey begins!'), 300);
+            } else if (crossedMilestone) {
+                setTimeout(() => Confetti.celebrate(`🎉 ${Fmt.money(crossedMilestone)} net worth milestone!`), 300);
+            } else if (kind === 'income' && amount >= 5000) {
+                setTimeout(() => Confetti.fire(0.5, 0.5), 200);
+                Toast.show('💰 Big income recorded!');
+            } else if (prevDebtCount > 0 && Store.data.debts.length === 0) {
+                setTimeout(() => Confetti.celebrate('🎊 Debt free! Incredible!'), 300);
+            } else {
+                Toast.show(capitalize(kind) + ' saved');
+            }
         }
     };
 
@@ -1312,6 +1506,7 @@
         UI.init();
         Background3D.init();
         Anim.init();
+        Keyboard.init();
         if (document.readyState === 'complete') setTimeout(() => Loader.hide(), 500);
         else addEventListener('load', () => setTimeout(() => Loader.hide(), 350));
         setTimeout(() => Loader.hide(), 2500); // safety net
