@@ -1666,3 +1666,121 @@ section {
     }
     .gradient-orb, .pulse, .btn-shimmer { animation: none !important; }
 }
+
+/* ==================== NEW FEATURES (v2) ==================== */
+
+/* Nav add button */
+.btn-add-nav { padding: var(--space-2) var(--space-4); }
+@media (max-width: 768px) { .btn-add-label { display: none; } .btn-add-nav { padding: var(--space-2); } }
+
+/* ---------- TICKER ---------- */
+.ticker {
+    position: sticky; top: 0; z-index: 900;
+    overflow: hidden; white-space: nowrap;
+    background: rgba(10,10,15,0.7);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--space-2) 0;
+    margin-top: 0;
+}
+[data-theme="light"] .ticker { background: rgba(244,245,251,0.8); }
+.ticker-track { display: inline-flex; align-items: center; gap: var(--space-4); padding-left: 100%; animation: tickerScroll 60s linear infinite; }
+.ticker:hover .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
+@keyframes tickerScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.ticker-item { font-size: 0.8rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: var(--space-2); }
+.ticker-quote { font-style: italic; color: var(--text-muted); }
+.ticker-metric .tk-key { color: var(--text-muted); font-size: 0.7rem; letter-spacing: 0.08em; font-weight: 600; }
+.ticker-metric .tk-val { color: var(--accent-green); font-weight: 600; font-family: var(--font-display); }
+.ticker-sep { color: var(--accent-green); opacity: 0.5; font-size: 0.6rem; margin: 0 var(--space-3); }
+@media (prefers-reduced-motion: reduce) {
+    .ticker { overflow-x: auto; }
+    .ticker-track { animation: none; padding-left: var(--space-4); }
+}
+
+/* ---------- HERO additions ---------- */
+.net-worth-breakdown { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-4); margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-color); }
+.bd-item { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 0.85rem; color: var(--text-secondary); }
+.bd-dot { width: 8px; height: 8px; border-radius: 50%; }
+.hero-cta { display: flex; gap: var(--space-3); justify-content: center; margin-top: var(--space-6); flex-wrap: wrap; }
+
+/* ---------- SECTION SUB ---------- */
+.section-sub { color: var(--text-muted); font-size: 0.85rem; }
+
+/* ---------- SPARK canvas ---------- */
+.stat-chart .spark { width: 100%; height: 40px; display: block; }
+
+/* ---------- VELOCITY ---------- */
+.velocity-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-4); }
+.velocity-item { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.velocity-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.velocity-value { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; }
+@media (max-width: 1100px) { .velocity-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .velocity-grid { grid-template-columns: repeat(2, 1fr); } .velocity-value { font-size: 1.2rem; } }
+
+/* ---------- DEBT ---------- */
+.debt-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); padding: var(--space-6); margin-bottom: var(--space-5); }
+.debt-stat { display: flex; flex-direction: column; gap: var(--space-1); }
+.debt-stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.debt-stat-value { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
+.debt-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.debt-item { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+.debt-icon { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--accent-red-dim); font-size: 1.3rem; }
+.debt-info { display: flex; flex-direction: column; }
+.debt-name { font-weight: 600; }
+.debt-meta { font-size: 0.8rem; color: var(--text-muted); }
+.debt-amount { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; color: var(--accent-red); }
+@media (max-width: 768px) { .debt-summary { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- DELETE BUTTON ---------- */
+.icon-del { width: 28px; height: 28px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-muted); font-size: 1.1rem; line-height: 1; cursor: pointer; transition: all var(--duration-fast); display: flex; align-items: center; justify-content: center; }
+.icon-del:hover { background: var(--accent-red-dim); color: var(--accent-red); border-color: var(--accent-red); }
+.transaction-item { position: relative; }
+
+/* ---------- SEGMENTED CONTROL ---------- */
+.activity-controls { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+.seg { display: flex; gap: 2px; background: var(--bg-glass); padding: 3px; border-radius: var(--radius-md); border: 1px solid var(--border-color); }
+.seg-btn { padding: var(--space-2) var(--space-4); background: none; border: none; color: var(--text-muted); font-size: 0.82rem; font-weight: 500; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--duration-normal); }
+.seg-btn:hover { color: var(--text-primary); }
+.seg-btn.active { background: var(--accent-green); color: var(--bg-primary); }
+[data-theme="light"] .seg-btn.active { color: #fff; }
+
+/* ---------- IMPORT ---------- */
+.import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); }
+.import-card { padding: var(--space-6); }
+.import-card h3 { font-family: var(--font-display); font-size: 1.15rem; margin-bottom: var(--space-2); }
+.import-desc { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: var(--space-5); }
+.import-kind { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.import-kind label { font-size: 0.85rem; color: var(--text-secondary); }
+.import-kind select { padding: var(--space-2) var(--space-4); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; cursor: pointer; }
+.dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-10) var(--space-6); border: 2px dashed var(--border-glow); border-radius: var(--radius-lg); color: var(--text-muted); cursor: pointer; transition: all var(--duration-normal); text-align: center; }
+.dropzone:hover, .dropzone:focus, .dropzone.dragover { border-color: var(--accent-green); color: var(--accent-green); background: var(--accent-green-dim); outline: none; }
+.dropzone-title { font-weight: 600; color: var(--text-primary); }
+.dropzone-sub { font-size: 0.8rem; }
+.import-result { margin-top: var(--space-4); font-size: 0.88rem; min-height: 1.2em; }
+.import-result.ok { color: var(--accent-green); }
+.import-result.err { color: var(--accent-red); }
+.data-actions { display: flex; flex-direction: column; gap: var(--space-3); }
+.data-actions .btn-secondary { justify-content: center; }
+.btn-danger { border-color: rgba(255,71,87,0.3) !important; color: var(--accent-red) !important; }
+.btn-danger:hover { background: var(--accent-red-dim) !important; }
+@media (max-width: 768px) { .import-grid { grid-template-columns: 1fr; } }
+
+/* ---------- MODAL TABS ---------- */
+.modal-tabs { display: flex; gap: 2px; background: var(--bg-glass); padding: 3px; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: var(--space-6); }
+.modal-tab { flex: 1; padding: var(--space-2) var(--space-2); background: none; border: none; color: var(--text-muted); font-size: 0.82rem; font-weight: 500; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--duration-normal); }
+.modal-tab:hover { color: var(--text-primary); }
+.modal-tab.active { background: var(--accent-green); color: var(--bg-primary); }
+[data-theme="light"] .modal-tab.active { color: #fff; }
+.modal-sm { max-width: 400px; }
+.confirm-text { color: var(--text-secondary); margin-bottom: var(--space-6); line-height: 1.6; }
+.confirm-actions { display: flex; gap: var(--space-3); justify-content: flex-end; }
+.btn-danger-solid { background: var(--accent-red) !important; color: #fff !important; }
+
+/* ---------- EMPTY STATE MINI ---------- */
+.empty-state.mini { padding: var(--space-8) var(--space-6); }
+.empty-state.mini .empty-icon { font-size: 2.5rem; }
+
+/* ---------- DASHBOARD spacing fix (ticker is sticky) ---------- */
+.stat-icon.debt { background: var(--accent-gold); background: rgba(251,191,36,0.15); color: var(--accent-gold); }
+.stat-card[data-type="debt"] .stat-glow { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
