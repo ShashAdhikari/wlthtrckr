@@ -68,6 +68,14 @@
             const d = new Date(dateStr);
             return d.getFullYear() === y && d.getMonth() === m;
         },
+        // One-time transactions in a specific month (excludes recurring)
+        monthIncomeOneTime(y, m) {
+            return this.sum(Store.data.transactions.filter(t => t.type === 'income' && (!t.frequency || t.frequency === 'once') && this.inMonth(t.date, y, m)), t => t.amount);
+        },
+        monthExpensesOneTime(y, m) {
+            return this.sum(Store.data.transactions.filter(t => t.type === 'expense' && (!t.frequency || t.frequency === 'once') && this.inMonth(t.date, y, m)), t => t.amount);
+        },
+        // Legacy: all transactions by date (for historical charts)
         monthIncome(y, m) {
             return this.sum(Store.data.transactions.filter(t => t.type === 'income' && this.inMonth(t.date, y, m)), t => t.amount);
         },
@@ -75,8 +83,15 @@
             return this.sum(Store.data.transactions.filter(t => t.type === 'expense' && this.inMonth(t.date, y, m)), t => t.amount);
         },
 
-        currentMonthIncome()  { const n = new Date(); return this.monthIncome(n.getFullYear(), n.getMonth()); },
-        currentMonthExpenses(){ const n = new Date(); return this.monthExpenses(n.getFullYear(), n.getMonth()); },
+        // Current month: one-time + recurring monthly equivalent
+        currentMonthIncome() {
+            const n = new Date();
+            return this.monthIncomeOneTime(n.getFullYear(), n.getMonth()) + this.recurringMonthlyIncome();
+        },
+        currentMonthExpenses() {
+            const n = new Date();
+            return this.monthExpensesOneTime(n.getFullYear(), n.getMonth()) + this.recurringMonthlyExpenses();
+        },
 
         savingsRate() {
             const inc = this.currentMonthIncome();
@@ -84,20 +99,17 @@
             return Math.round(((inc - this.currentMonthExpenses()) / inc) * 100);
         },
 
-        // Velocity (based on current month so far + recurring projections)
+        // Velocity (based on current month totals including recurring)
         velocity() {
             const now = new Date();
-            const dayOfMonth = now.getDate();
             const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            // currentMonthIncome/Expenses already includes recurring monthly amounts
             const inc = this.currentMonthIncome();
             const exp = this.currentMonthExpenses();
             const recurringInc = this.recurringMonthlyIncome();
             const recurringExp = this.recurringMonthlyExpenses();
-            // Project to full month including recurring
-            const projectedMonthInc = inc + recurringInc;
-            const projectedMonthExp = exp + recurringExp;
-            const spendPerDay = projectedMonthExp / daysInMonth;
-            const incomePerDay = projectedMonthInc / daysInMonth;
+            const spendPerDay = exp / daysInMonth;
+            const incomePerDay = inc / daysInMonth;
             const cash = this.liquidCash();
             const runwayDays = spendPerDay > 0 ? cash / spendPerDay : Infinity;
             return {
@@ -105,7 +117,7 @@
                 spendPerHour: spendPerDay / 24,
                 incomePerDay,
                 netPerDay: incomePerDay - spendPerDay,
-                savingsRate: projectedMonthInc > 0 ? Math.round(((projectedMonthInc - projectedMonthExp) / projectedMonthInc) * 100) : 0,
+                savingsRate: inc > 0 ? Math.round(((inc - exp) / inc) * 100) : 0,
                 runwayMonths: runwayDays === Infinity ? Infinity : runwayDays / 30,
                 recurringIncome: recurringInc,
                 recurringExpenses: recurringExp
