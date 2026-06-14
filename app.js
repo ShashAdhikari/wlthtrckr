@@ -188,6 +188,17 @@
     function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
     function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
 
+    // Apply a staggered entrance animation to a freshly-rendered list's children.
+    function staggerIn(container) {
+        if (!container || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const kids = container.children;
+        const n = Math.min(kids.length, 20); // cap stagger cost on large lists
+        container.classList.remove('stagger');
+        void container.offsetWidth; // force reflow so the animation re-triggers
+        for (let i = 0; i < kids.length; i++) kids[i].style.setProperty('--i', i < n ? i : n);
+        container.classList.add('stagger');
+    }
+
     const ASSET_META = {
         stocks:     { label: 'Stocks & ETFs',    color: '#4facfe', icon: '📊' },
         crypto:     { label: 'Cryptocurrency',   color: '#a855f7', icon: '🪙' },
@@ -207,6 +218,122 @@
     const CAT_ICON = {
         housing:'🏠', food:'🍔', transport:'🚗', utilities:'💡', entertainment:'🎬',
         healthcare:'🏥', shopping:'🛍️', salary:'💼', business:'🏢', investment:'📈', other:'📦'
+    };
+
+    // ==================== CLASSIFIER (on-device intelligence) ====================
+    // Keyword + merchant dictionaries score a free-text label into a category.
+    // Multi-word phrases score higher than single tokens; exact merchant hits win.
+    const Classifier = {
+        // [pattern, weight] — phrases (with spaces) are matched as substrings,
+        // single tokens are matched on word boundaries.
+        expense: {
+            food: [['restaurant',3],['cafe',3],['coffee',3],['starbucks',5],['mcdonald',5],['burger',3],
+                ['pizza',3],['grocery',4],['groceries',4],['supermarket',4],['whole foods',5],['trader joe',5],
+                ['safeway',5],['kroger',5],['aldi',5],['dining',3],['doordash',5],['uber eats',5],['ubereats',5],
+                ['grubhub',5],['deli',3],['bakery',3],['chipotle',5],['subway',4],['kfc',5],['taco',3],['sushi',3],
+                ['diner',3],['bistro',3],['brewery',3],['pub',2],['snack',2],['lunch',2],['dinner',2],['breakfast',2],
+                ['food',2],['eatery',3],['noodle',3],['ramen',3],['steakhouse',4],['panera',5],['wendys',5],['dunkin',5]],
+            transport: [['uber',4],['lyft',5],['taxi',4],['cab',2],['gas station',5],['fuel',4],['shell',4],
+                ['chevron',5],['exxon',5],['petrol',4],['parking',4],['toll',4],['transit',4],['metro',3],['mta',5],
+                ['bus fare',5],['train',3],['airline',4],['flight',4],['delta air',5],['united air',5],['amtrak',5],
+                ['car wash',4],['mechanic',4],['oil change',5],['dmv',4],['rideshare',5],['scooter',2],['bike share',4],
+                ['ev charge',5],['charging',3],['airport',3]],
+            housing: [['rent',4],['mortgage',5],['lease',3],['landlord',5],['apartment',3],['hoa',5],['property tax',5],
+                ['home depot',5],['lowes',5],['ikea',5],['furniture',3],['maintenance',2],['plumber',4],['handyman',4],
+                ['renovation',4],['cleaning service',4]],
+            utilities: [['electric',4],['electricity',5],['water bill',5],['internet',4],['wifi',4],['comcast',5],
+                ['verizon',4],['at&t',4],['t-mobile',5],['phone bill',5],['mobile plan',5],['utility',4],['power bill',5],
+                ['sewage',5],['natural gas',5],['broadband',5],['spectrum',5],['xfinity',5],['cell phone',4],['data plan',4]],
+            entertainment: [['netflix',5],['spotify',5],['hulu',5],['disney',5],['hbo',5],['movie',3],['cinema',4],
+                ['theater',3],['concert',4],['gaming',3],['steam',3],['playstation',5],['xbox',5],['nintendo',5],
+                ['youtube',3],['twitch',4],['amusement',4],['theme park',5],['music',2],['apple music',5],['prime video',5],
+                ['paramount',4],['peacock',4],['event ticket',5],['festival',3],['bowling',3],['arcade',3]],
+            healthcare: [['doctor',4],['hospital',5],['clinic',4],['pharmacy',5],['cvs',4],['walgreens',5],['medical',4],
+                ['dental',5],['dentist',5],['vision',2],['optometry',5],['therapy',3],['medicine',4],['prescription',5],
+                ['copay',5],['urgent care',5],['health insurance',5],['gym',3],['fitness',3],['wellness',2],['lab test',4]],
+            shopping: [['amazon',4],['walmart',4],['target',3],['ebay',5],['etsy',5],['mall',3],['clothing',3],
+                ['apparel',4],['nike',5],['adidas',5],['zara',5],['h&m',5],['best buy',5],['apple store',5],['retail',2],
+                ['shoes',3],['electronics',3],['costco',3],['department store',5],['boutique',3],['sephora',5],['macys',5]],
+            salary: [['salary',5],['payroll',5],['paycheck',5],['wages',5],['direct deposit',5],['employer',4],['stipend',4]],
+            business: [['invoice',4],['consulting',5],['freelance',5],['client payment',5],['office supplies',5],
+                ['saas',4],['software subscription',5],['business expense',5],['contractor',3],['advertising',3],['hosting',3]]
+        },
+        investment: {
+            crypto: [['bitcoin',6],['btc',6],['ethereum',6],['eth',5],['crypto',5],['coinbase',5],['binance',5],
+                ['solana',6],['cardano',6],['dogecoin',6],['ripple',5],['xrp',6],['litecoin',6],['altcoin',5],
+                ['usdt',5],['usdc',5],['polkadot',6],['avalanche',5],['blockchain',4],['nft',4],['stablecoin',5],['ada',4],['sol',3]],
+            stocks: [['stock',4],['etf',5],['shares',4],['equity',4],['s&p',5],['sp500',5],['nasdaq',5],['index fund',5],
+                ['mutual fund',5],['vanguard',5],['fidelity',5],['schwab',5],['robinhood',5],['brokerage',5],['dividend',4],
+                ['401k',5],['roth ira',5],['ira',4],['vti',5],['voo',5],['spy',4],['qqq',5],['tesla',4],['apple stock',5],
+                ['nvidia',4],['microsoft',3],['amazon stock',5],['growth fund',5],['blue chip',4]],
+            realestate: [['real estate',6],['rental',5],['property',4],['condo',5],['reit',6],['land',3],['building',3],
+                ['house equity',5],['home equity',5],['duplex',5],['airbnb',4],['investment property',6]],
+            bonds: [['bond',5],['treasury',6],['t-bill',6],['fixed income',6],['certificate of deposit',6],['municipal',5],
+                ['corporate bond',6],['gilt',5],['savings bond',6],['cd ',4],['yield note',5]],
+            cash: [['cash',4],['savings account',6],['checking',5],['money market',6],['hysa',6],['high yield',5],
+                ['emergency fund',6],['bank balance',5],['deposit',3],['reserve',3]]
+        },
+
+        normalize(s) { return ' ' + String(s || '').toLowerCase().replace(/[^a-z0-9&\s]/g, ' ').replace(/\s+/g, ' ').trim() + ' '; },
+
+        score(text, dict) {
+            const t = this.normalize(text);
+            let best = null, bestScore = 0, total = 0;
+            Object.keys(dict).forEach(cat => {
+                let s = 0;
+                dict[cat].forEach(([pat, w]) => {
+                    if (pat.indexOf(' ') >= 0 || /[&]/.test(pat)) { // phrase / special
+                        if (t.indexOf(pat) >= 0) s += w;
+                    } else { // single token, word-boundary
+                        if (t.indexOf(' ' + pat + ' ') >= 0) s += w;
+                    }
+                });
+                total += s;
+                if (s > bestScore) { bestScore = s; best = cat; }
+            });
+            return { category: best, score: bestScore, confidence: total > 0 ? bestScore / total : 0 };
+        },
+
+        // Detect an ALL-CAPS ticker (2–5 letters) as a stock hint.
+        looksLikeTicker(text) {
+            return /(^|\s)[A-Z]{2,5}(\s|$)/.test(String(text || '')) && !/[a-z]{3,}/.test(String(text || ''));
+        },
+
+        classifyExpense(description) {
+            const r = this.score(description, this.expense);
+            // ignore income-only buckets when classifying an expense
+            if (r.category === 'salary') return { category: 'other', confidence: 0 };
+            return r.score > 0 ? { category: r.category, confidence: r.confidence } : { category: null, confidence: 0 };
+        },
+
+        classifyIncome(description) {
+            const r = this.score(description, this.expense);
+            if (r.category === 'salary' || r.category === 'business') return { category: r.category, confidence: r.confidence };
+            return { category: null, confidence: 0 };
+        },
+
+        classifyInvestment(name) {
+            const r = this.score(name, this.investment);
+            if (r.score > 0) return { assetType: r.category, confidence: r.confidence };
+            if (this.looksLikeTicker(name)) return { assetType: 'stocks', confidence: 0.5 };
+            return { assetType: null, confidence: 0 };
+        }
+    };
+
+    // ==================== ANIMATED NUMBERS ====================
+    const Num = {
+        // Tween an element's text to a new value. Stores last numeric in dataset.
+        tween(el, to, fmt, dur = 0.7) {
+            if (!el) return;
+            const target = Number(to) || 0;
+            const from = el.dataset.val !== undefined ? Number(el.dataset.val) : target;
+            el.dataset.val = target;
+            const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (!hasGSAP() || reduce || from === target) { el.textContent = fmt(target); return; }
+            gsap.killTweensOf(el);
+            const o = { v: from };
+            gsap.to(o, { v: target, duration: dur, ease: 'power2.out', onUpdate: () => { el.textContent = fmt(o.v); } });
+        }
     };
 
     // ==================== TOAST ====================
@@ -508,9 +635,43 @@
             modal.classList.remove('active');
             document.body.style.overflow = '';
             document.getElementById('entry-form').reset();
+            this.manualCat = false; this.manualAsset = false;
+            const cb = document.getElementById('cat-auto'); if (cb) cb.hidden = true;
+            const ab = document.getElementById('asset-auto'); if (ab) ab.hidden = true;
         },
+        manualCat: false,
+        manualAsset: false,
+
+        // Live auto-categorization from the description/name field.
+        autoClassify() {
+            const kind = document.getElementById('entry-kind').value;
+            const name = document.getElementById('f-name').value;
+            if (kind === 'expense' || kind === 'income') {
+                if (this.manualCat) return;
+                const res = kind === 'income' ? Classifier.classifyIncome(name) : Classifier.classifyExpense(name);
+                const badge = document.getElementById('cat-auto');
+                const sel = document.getElementById('f-category');
+                if (res.category && sel) {
+                    sel.value = res.category;
+                    if (badge) badge.hidden = false;
+                } else if (badge) { badge.hidden = true; }
+            } else if (kind === 'investment') {
+                if (this.manualAsset) return;
+                const res = Classifier.classifyInvestment(name);
+                const badge = document.getElementById('asset-auto');
+                const sel = document.getElementById('f-asset-type');
+                if (res.assetType && sel) {
+                    sel.value = res.assetType;
+                    if (badge) badge.hidden = false;
+                } else if (badge) { badge.hidden = true; }
+            }
+        },
+
         setKind(kind) {
             this.kind = kind;
+            this.manualCat = false; this.manualAsset = false;
+            const cb = document.getElementById('cat-auto'); if (cb) cb.hidden = true;
+            const ab = document.getElementById('asset-auto'); if (ab) ab.hidden = true;
             document.getElementById('entry-kind').value = kind;
             document.querySelectorAll('.modal-tab').forEach(t => t.classList.toggle('active', t.dataset.kind === kind));
             const isTx = (kind === 'expense' || kind === 'income');
@@ -559,7 +720,6 @@
             }
             this.close();
             UI.refresh();
-            Anim.counter('net-worth', Calc.netWorth(), 0.8);
             Toast.show(capitalize(kind) + ' saved');
         }
     };
@@ -658,19 +818,30 @@
         importRows(rows) {
             if (!rows || !rows.length) { this.result('No rows found in file', false); return; }
             const target = document.getElementById('import-target').value;
-            let count = 0;
+            let count = 0, autoTagged = 0;
             rows.forEach(r => {
                 const name = this.pick(r, ['description', 'name', 'merchant', 'detail', 'memo', 'payee']) || capitalize(target);
                 const amount = this.toNum(this.pick(r, ['amount', 'value', 'balance', 'total', 'price', 'debit', 'credit']));
                 const date = this.toDate(this.pick(r, ['date', 'time', 'posted', 'when']));
                 if (amount <= 0) return;
                 if (target === 'expense' || target === 'income') {
-                    const cat = (this.pick(r, ['category', 'type', 'tag']) || (target === 'income' ? 'salary' : 'other')).toLowerCase();
-                    const category = CAT_ICON[cat] ? cat : (target === 'income' ? 'salary' : 'other');
+                    let cat = (this.pick(r, ['category', 'tag']) || '').toLowerCase();
+                    let category = CAT_ICON[cat] ? cat : '';
+                    // No usable category column -> classify intelligently from the description.
+                    if (!category) {
+                        const res = target === 'income' ? Classifier.classifyIncome(name) : Classifier.classifyExpense(name);
+                        if (res.category) { category = res.category; autoTagged++; }
+                        else category = (target === 'income' ? 'salary' : 'other');
+                    }
                     Store.data.transactions.push({ id: uid(), description: String(name), amount, category, date, type: target });
                 } else if (target === 'investment') {
-                    const at = (this.pick(r, ['assettype', 'type', 'class', 'category']) || 'other').toLowerCase();
-                    const assetType = ASSET_META[at] ? at : 'other';
+                    let at = (this.pick(r, ['assettype', 'class']) || '').toLowerCase();
+                    let assetType = ASSET_META[at] ? at : '';
+                    if (!assetType) {
+                        const res = Classifier.classifyInvestment(name);
+                        if (res.assetType) { assetType = res.assetType; autoTagged++; }
+                        else assetType = 'other';
+                    }
                     Store.data.investments.push({ id: uid(), name: String(name), value: amount, assetType, date });
                 } else if (target === 'debt') {
                     const dt = (this.pick(r, ['debttype', 'type', 'class']) || 'other').toLowerCase();
@@ -681,8 +852,11 @@
             });
             Store.saveAll();
             UI.refresh();
-            if (count > 0) { this.result(`Imported ${count} ${target}${count === 1 ? '' : 's'} successfully.`, true); Toast.show(`Imported ${count} record${count === 1 ? '' : 's'}`); }
-            else this.result('No valid rows could be imported. Check that the file has amount/value columns.', false);
+            if (count > 0) {
+                const extra = autoTagged > 0 ? ` (${autoTagged} auto-categorized)` : '';
+                this.result(`Imported ${count} ${target}${count === 1 ? '' : 's'} successfully${extra}.`, true);
+                Toast.show(`Imported ${count} record${count === 1 ? '' : 's'}`);
+            } else this.result('No valid rows could be imported. Check that the file has amount/value columns.', false);
         },
 
         result(msg, ok) {
@@ -760,7 +934,6 @@
             Store.data.transactions = tx; Store.data.investments = inv; Store.data.debts = debts;
             Store.saveAll();
             UI.refresh();
-            Anim.counter('net-worth', Calc.netWorth(), 1);
             Toast.show('Demo data loaded');
         }
     };
@@ -790,10 +963,10 @@
             this.renderHero();
             this.renderStats();
             this.renderVelocity();
-            this.renderAssets();
-            this.renderDebts();
+            this.renderAssets(true);
+            this.renderDebts(true);
             this.renderInsights();
-            this.renderTransactions();
+            this.renderTransactions(true);
             Ticker.render();
             Charts.renderAll();
         },
@@ -802,7 +975,9 @@
         renderHero() {
             const nw = Calc.netWorth();
             const el = document.getElementById('net-worth');
-            if (el && Loader.done) el.textContent = Math.abs(Math.round(nw)).toLocaleString();
+            // Smoothly tween from the previous value (set directly until the loader's
+            // dramatic count-up has run, to avoid a double animation on first paint).
+            if (el && Loader.done) Num.tween(el, Math.abs(nw), (v) => Math.round(v).toLocaleString(), 0.7);
             const sym = document.getElementById('currency-symbol');
             if (sym) sym.textContent = (nw < 0 ? '-' : '') + Fmt.symbol();
 
@@ -825,11 +1000,11 @@
 
         // ---------- STAT CARDS ----------
         renderStats() {
-            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-            set('stat-income', Fmt.money(Calc.currentMonthIncome()));
-            set('stat-expenses', Fmt.money(Calc.currentMonthExpenses()));
-            set('stat-investments', Fmt.money(Calc.totalInvestments()));
-            set('stat-debt', Fmt.money(Calc.totalDebt()));
+            const money = (id, val) => { const e = document.getElementById(id); if (e) Num.tween(e, val, (v) => Fmt.money(v), 0.6); };
+            money('stat-income', Calc.currentMonthIncome());
+            money('stat-expenses', Calc.currentMonthExpenses());
+            money('stat-investments', Calc.totalInvestments());
+            money('stat-debt', Calc.totalDebt());
 
             // trends: compare current month vs previous month for income/expense
             const now = new Date();
@@ -852,24 +1027,25 @@
         // ---------- VELOCITY ----------
         renderVelocity() {
             const v = Calc.velocity();
-            const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-            set('vel-spend-day', Fmt.money(v.spendPerDay));
-            set('vel-spend-hour', Fmt.moneyPrecise(v.spendPerHour));
-            set('vel-income-day', Fmt.money(v.incomePerDay));
-            set('vel-net-day', Fmt.money(v.netPerDay));
-            set('vel-savings', v.savingsRate + '%');
-            set('vel-runway', v.runwayMonths === Infinity ? '∞' : (Math.round(v.runwayMonths * 10) / 10) + ' mo');
+            const tw = (id, val, fmt) => { const e = document.getElementById(id); if (e) Num.tween(e, val, fmt, 0.6); };
+            tw('vel-spend-day', v.spendPerDay, (x) => Fmt.money(x));
+            tw('vel-spend-hour', v.spendPerHour, (x) => Fmt.moneyPrecise(x));
+            tw('vel-income-day', v.incomePerDay, (x) => Fmt.money(x));
+            tw('vel-net-day', v.netPerDay, (x) => Fmt.money(x));
+            tw('vel-savings', v.savingsRate, (x) => Math.round(x) + '%');
+            const runwayEl = document.getElementById('vel-runway');
+            if (runwayEl) runwayEl.textContent = v.runwayMonths === Infinity ? '∞' : (Math.round(v.runwayMonths * 10) / 10) + ' mo';
 
             const netEl = document.getElementById('vel-net-day');
             if (netEl) netEl.style.color = v.netPerDay >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
         },
 
         // ---------- ASSETS ----------
-        renderAssets() {
+        renderAssets(animate) {
             const list = document.getElementById('asset-list');
             const totalEl = document.getElementById('portfolio-total');
             const total = Calc.totalInvestments();
-            if (totalEl) totalEl.textContent = Fmt.money(total);
+            if (totalEl) Num.tween(totalEl, total, (v) => Fmt.money(v), 0.6);
             if (!list) return;
             const alloc = Calc.allocation();
             const keys = Object.keys(alloc).filter(k => alloc[k] > 0).sort((a, b) => alloc[b] - alloc[a]);
@@ -887,10 +1063,11 @@
                     <div class="asset-bar" style="--width:${pct}%;--color:${meta.color}"></div>
                 </div>`;
             }).join('');
+            if (animate) staggerIn(list);
         },
 
         // ---------- DEBTS ----------
-        renderDebts() {
+        renderDebts(animate) {
             const summary = document.getElementById('debt-summary');
             const list = document.getElementById('debt-list');
             const debts = Store.data.debts;
@@ -924,6 +1101,7 @@
                     <button class="icon-del" data-del-debt="${d.id}" aria-label="Delete debt">×</button>
                 </div>`;
             }).join('');
+            if (animate) staggerIn(list);
         },
 
         // ---------- INSIGHTS ----------
@@ -964,7 +1142,7 @@
         },
 
         // ---------- TRANSACTIONS ----------
-        renderTransactions() {
+        renderTransactions(animate) {
             const container = document.getElementById('transactions-list');
             if (!container) return;
             let list = Store.data.transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -988,6 +1166,7 @@
                     <button class="icon-del" data-del-tx="${tx.id}" aria-label="Delete transaction">×</button>
                 </div>`;
             }).join('');
+            if (animate) staggerIn(container);
         },
 
         // ---------- WIRING ----------
@@ -1028,6 +1207,12 @@
             document.getElementById('entry-form')?.addEventListener('submit', (e) => { e.preventDefault(); Modal.submit(); });
             document.querySelectorAll('.modal-tab').forEach(tab => tab.addEventListener('click', () => Modal.setKind(tab.dataset.kind)));
             addEventListener('keydown', (e) => { if (e.key === 'Escape') { Modal.close(); Confirm.hide(); } });
+
+            // Live, on-device auto-categorization as the user types.
+            let t;
+            document.getElementById('f-name')?.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => Modal.autoClassify(), 120); });
+            document.getElementById('f-category')?.addEventListener('change', () => { Modal.manualCat = true; const b = document.getElementById('cat-auto'); if (b) b.hidden = true; });
+            document.getElementById('f-asset-type')?.addEventListener('change', () => { Modal.manualAsset = true; const b = document.getElementById('asset-auto'); if (b) b.hidden = true; });
         },
 
         wireConfirm() {
@@ -1136,5 +1321,5 @@
     else init();
 
     // expose for debugging/QA
-    window.WLTH = { Store, Calc, UI, Demo };
+    window.WLTH = { Store, Calc, UI, Demo, Classifier, Modal, Upload };
 })();

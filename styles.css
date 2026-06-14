@@ -1784,3 +1784,26 @@ section {
 /* ---------- DASHBOARD spacing fix (ticker is sticky) ---------- */
 .stat-icon.debt { background: var(--accent-gold); background: rgba(251,191,36,0.15); color: var(--accent-gold); }
 .stat-card[data-type="debt"] .stat-glow { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+
+/* ==================== CLASSIFIER + ANIMATION (v3) ==================== */
+
+/* Auto-detected category badge */
+.auto-badge {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--accent-green); background: var(--accent-green-dim);
+    border: 1px solid rgba(0,255,136,0.25);
+    padding: 1px 7px; border-radius: var(--radius-full);
+    margin-left: var(--space-2); vertical-align: middle;
+    animation: badgePop 0.3s var(--ease-out);
+}
+[data-theme="light"] .auto-badge { color: #00935a; }
+@keyframes badgePop { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+
+/* Staggered list entrance */
+@keyframes itemIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.stagger > * { animation: itemIn 0.42s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 0.035s); }
+@media (prefers-reduced-motion: reduce) { .stagger > * { animation: none; } }
+
+/* Smooth value transitions for tweened numbers (subtle color flash on change is handled in JS) */
+.stat-value, .velocity-value, .chart-center-value, .net-worth-value .amount { transition: color var(--duration-normal) var(--ease-out); }
