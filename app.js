@@ -40,6 +40,23 @@
     const Calc = {
         sum(arr, fn) { return arr.reduce((s, x) => s + (fn(x) || 0), 0); },
 
+        // Convert frequency to monthly multiplier
+        freqToMonthly: { once: 0, weekly: 4.33, biweekly: 2.17, monthly: 1, quarterly: 0.33, yearly: 0.083 },
+
+        // Get monthly equivalent of a transaction amount
+        monthlyAmount(t) {
+            if (!t.frequency || t.frequency === 'once') return 0;
+            return t.amount * (this.freqToMonthly[t.frequency] || 0);
+        },
+
+        // Recurring monthly totals
+        recurringMonthlyIncome() {
+            return this.sum(Store.data.transactions.filter(t => t.type === 'income' && t.frequency && t.frequency !== 'once'), t => this.monthlyAmount(t));
+        },
+        recurringMonthlyExpenses() {
+            return this.sum(Store.data.transactions.filter(t => t.type === 'expense' && t.frequency && t.frequency !== 'once'), t => this.monthlyAmount(t));
+        },
+
         totalIncome()  { return this.sum(Store.data.transactions.filter(t => t.type === 'income'),  t => t.amount); },
         totalExpenses(){ return this.sum(Store.data.transactions.filter(t => t.type === 'expense'), t => t.amount); },
         liquidCash()   { return this.totalIncome() - this.totalExpenses(); },
@@ -67,14 +84,20 @@
             return Math.round(((inc - this.currentMonthExpenses()) / inc) * 100);
         },
 
-        // Velocity (based on current month so far)
+        // Velocity (based on current month so far + recurring projections)
         velocity() {
             const now = new Date();
             const dayOfMonth = now.getDate();
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
             const inc = this.currentMonthIncome();
             const exp = this.currentMonthExpenses();
-            const spendPerDay = exp / dayOfMonth;
-            const incomePerDay = inc / dayOfMonth;
+            const recurringInc = this.recurringMonthlyIncome();
+            const recurringExp = this.recurringMonthlyExpenses();
+            // Project to full month including recurring
+            const projectedMonthInc = inc + recurringInc;
+            const projectedMonthExp = exp + recurringExp;
+            const spendPerDay = projectedMonthExp / daysInMonth;
+            const incomePerDay = projectedMonthInc / daysInMonth;
             const cash = this.liquidCash();
             const runwayDays = spendPerDay > 0 ? cash / spendPerDay : Infinity;
             return {
@@ -82,8 +105,10 @@
                 spendPerHour: spendPerDay / 24,
                 incomePerDay,
                 netPerDay: incomePerDay - spendPerDay,
-                savingsRate: this.savingsRate(),
-                runwayMonths: runwayDays === Infinity ? Infinity : runwayDays / 30
+                savingsRate: projectedMonthInc > 0 ? Math.round(((projectedMonthInc - projectedMonthExp) / projectedMonthInc) * 100) : 0,
+                runwayMonths: runwayDays === Infinity ? Infinity : runwayDays / 30,
+                recurringIncome: recurringInc,
+                recurringExpenses: recurringExp
             };
         },
 
@@ -886,7 +911,8 @@
             const prevDebtCount = Store.data.debts.length;
 
             if (kind === 'expense' || kind === 'income') {
-                Store.add('transactions', { id: uid(), description: name, amount, category: document.getElementById('f-category').value, date, type: kind });
+                const frequency = document.getElementById('f-frequency').value;
+                Store.add('transactions', { id: uid(), description: name, amount, category: document.getElementById('f-category').value, date, type: kind, frequency });
             } else if (kind === 'investment') {
                 Store.add('investments', { id: uid(), name, value: amount, assetType: document.getElementById('f-asset-type').value, date });
             } else if (kind === 'debt') {
@@ -1100,16 +1126,19 @@
                 return d.toISOString().slice(0, 10);
             };
             const tx = [];
-            // 6 months of salary + recurring expenses + a few variable ones
+            // Recurring income/expenses (set once, applied monthly)
+            tx.push({ id: uid(), description: 'Monthly Salary', amount: 6200, category: 'salary', date: iso(0, 1), type: 'income', frequency: 'monthly' });
+            tx.push({ id: uid(), description: 'Rent Payment', amount: 1800, category: 'housing', date: iso(0, 1), type: 'expense', frequency: 'monthly' });
+            tx.push({ id: uid(), description: 'Utilities', amount: 180, category: 'utilities', date: iso(0, 5), type: 'expense', frequency: 'monthly' });
+            tx.push({ id: uid(), description: 'Netflix + Spotify', amount: 28, category: 'entertainment', date: iso(0, 10), type: 'expense', frequency: 'monthly' });
+            tx.push({ id: uid(), description: 'Gym Membership', amount: 45, category: 'healthcare', date: iso(0, 1), type: 'expense', frequency: 'monthly' });
+            tx.push({ id: uid(), description: 'Car Insurance', amount: 320, category: 'transport', date: iso(0, 15), type: 'expense', frequency: 'quarterly' });
+            // One-time transactions (historical)
             for (let m = 5; m >= 0; m--) {
-                tx.push({ id: uid(), description: 'Monthly Salary', amount: 6200, category: 'salary', date: iso(m, 1), type: 'income' });
-                tx.push({ id: uid(), description: 'Freelance Project', amount: 900 + Math.round(Math.random()*600), category: 'business', date: iso(m, 14), type: 'income' });
-                tx.push({ id: uid(), description: 'Rent', amount: 1800, category: 'housing', date: iso(m, 2), type: 'expense' });
-                tx.push({ id: uid(), description: 'Groceries', amount: 420 + Math.round(Math.random()*180), category: 'food', date: iso(m, 6), type: 'expense' });
-                tx.push({ id: uid(), description: 'Utilities', amount: 160 + Math.round(Math.random()*60), category: 'utilities', date: iso(m, 10), type: 'expense' });
-                tx.push({ id: uid(), description: 'Transit & Fuel', amount: 140, category: 'transport', date: iso(m, 8), type: 'expense' });
-                tx.push({ id: uid(), description: 'Dining Out', amount: 200 + Math.round(Math.random()*150), category: 'food', date: iso(m, 18), type: 'expense' });
-                tx.push({ id: uid(), description: 'Subscriptions', amount: 75, category: 'entertainment', date: iso(m, 20), type: 'expense' });
+                tx.push({ id: uid(), description: 'Freelance Project', amount: 900 + Math.round(Math.random()*600), category: 'business', date: iso(m, 14), type: 'income', frequency: 'once' });
+                tx.push({ id: uid(), description: 'Groceries', amount: 420 + Math.round(Math.random()*180), category: 'food', date: iso(m, 6), type: 'expense', frequency: 'once' });
+                tx.push({ id: uid(), description: 'Transit & Gas', amount: 140 + Math.round(Math.random()*60), category: 'transport', date: iso(m, 8), type: 'expense', frequency: 'once' });
+                tx.push({ id: uid(), description: 'Dining Out', amount: 200 + Math.round(Math.random()*150), category: 'food', date: iso(m, 18), type: 'expense', frequency: 'once' });
             }
             const inv = [
                 { id: uid(), name: 'S&P 500 ETF', value: 42000, assetType: 'stocks', date: iso(5, 1) },
@@ -1232,6 +1261,22 @@
 
             const netEl = document.getElementById('vel-net-day');
             if (netEl) netEl.style.color = v.netPerDay >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+
+            // Recurring summary
+            const recSum = document.getElementById('recurring-summary');
+            if (recSum) {
+                if (v.recurringIncome > 0 || v.recurringExpenses > 0) {
+                    const netRecurring = v.recurringIncome - v.recurringExpenses;
+                    recSum.innerHTML = `
+                        <div class="rec-grid">
+                            <div class="rec-item"><span class="rec-label">🔄 Recurring Income</span><span class="rec-value positive">${Fmt.money(v.recurringIncome)}/mo</span></div>
+                            <div class="rec-item"><span class="rec-label">🔄 Recurring Expenses</span><span class="rec-value negative">${Fmt.money(v.recurringExpenses)}/mo</span></div>
+                            <div class="rec-item"><span class="rec-label">📊 Net Recurring</span><span class="rec-value ${netRecurring >= 0 ? 'positive' : 'negative'}">${Fmt.money(netRecurring)}/mo</span></div>
+                        </div>`;
+                } else {
+                    recSum.innerHTML = '<p class="rec-empty">No recurring transactions yet. Add income or expenses with a frequency to see projections.</p>';
+                }
+            }
         },
 
         // ---------- ASSETS ----------
@@ -1350,12 +1395,14 @@
                     : `<div class="empty-state"><div class="empty-icon">📊</div><h3>No transactions yet</h3><p>Add your first income or expense, or load demo data.</p><button class="btn-primary btn-glow" data-action="expense"><span>Add Transaction</span><span class="btn-shimmer"></span></button></div>`;
                 return;
             }
+            const freqLabels = { weekly: '🔄 Weekly', biweekly: '🔄 Bi-weekly', monthly: '🔄 Monthly', quarterly: '🔄 Quarterly', yearly: '🔄 Yearly' };
             container.innerHTML = shown.map(tx => {
                 const icon = CAT_ICON[tx.category] || '📦';
                 const isExp = tx.type === 'expense';
-                return `<div class="transaction-item">
+                const freqBadge = tx.frequency && tx.frequency !== 'once' ? `<span class="freq-badge">${freqLabels[tx.frequency] || tx.frequency}</span>` : '';
+                return `<div class="transaction-item${tx.frequency && tx.frequency !== 'once' ? ' recurring' : ''}">
                     <div class="tx-icon">${icon}</div>
-                    <div class="tx-info"><span class="tx-description">${escapeHtml(tx.description)}</span><span class="tx-meta">${escapeHtml(capitalize(tx.category))} • ${Fmt.date(tx.date)}</span></div>
+                    <div class="tx-info"><span class="tx-description">${escapeHtml(tx.description)}${freqBadge}</span><span class="tx-meta">${escapeHtml(capitalize(tx.category))} • ${Fmt.date(tx.date)}</span></div>
                     <span class="tx-amount ${isExp ? 'expense' : 'income'}">${isExp ? '−' : '+'}${Fmt.moneyPrecise(tx.amount)}</span>
                     <button class="icon-del" data-del-tx="${tx.id}" aria-label="Delete transaction">×</button>
                 </div>`;

@@ -170,7 +170,7 @@
         <section class="velocity-section" id="velocity">
             <div class="section-header">
                 <h2 class="section-title">Spending Velocity</h2>
-                <span class="section-sub">Real-time rates based on this month</span>
+                <span class="section-sub">Projected rates including recurring items</span>
             </div>
             <div class="velocity-grid" id="velocity-grid">
                 <div class="velocity-item glass"><span class="velocity-label">Spend / Day</span><span class="velocity-value" id="vel-spend-day">$0</span></div>
@@ -180,6 +180,7 @@
                 <div class="velocity-item glass"><span class="velocity-label">Savings Rate</span><span class="velocity-value" id="vel-savings">0%</span></div>
                 <div class="velocity-item glass"><span class="velocity-label">Cash Runway</span><span class="velocity-value" id="vel-runway">—</span></div>
             </div>
+            <div class="recurring-summary glass" id="recurring-summary"></div>
         </section>
 
         <!-- Portfolio -->
@@ -365,6 +366,19 @@
                             <option value="other">📦 Other</option>
                         </select>
                     </div>
+                </div>
+
+                <!-- Frequency: transactions only -->
+                <div class="form-group field-tx">
+                    <label for="f-frequency">Frequency</label>
+                    <select id="f-frequency">
+                        <option value="once">One-time</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Bi-weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
                 </div>
 
                 <!-- Debt extra fields -->
