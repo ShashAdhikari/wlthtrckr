@@ -195,6 +195,20 @@
             const prev = s.net[n - 2], curr = s.net[n - 1];
             if (prev === 0) return curr === 0 ? 0 : null; // undefined baseline
             return ((curr - prev) / Math.abs(prev)) * 100;
+        },
+
+        safeToSpend() {
+            return this.recurringMonthlyIncome() - this.recurringMonthlyExpenses();
+        },
+
+        pulseHealth() {
+            const sts = this.safeToSpend();
+            const runway = this.velocity().runwayMonths;
+            if (sts <= 0) return 'critical';
+            if (sts < 500) return 'caution';
+            if (runway < 3) return 'caution';
+            if (runway < 6) return 'healthy';
+            return 'thriving';
         }
     };
 
@@ -1273,6 +1287,19 @@
 
             const netEl = document.getElementById('vel-net-day');
             if (netEl) netEl.style.color = v.netPerDay >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+
+            // Safe-to-Spend & Pulse
+            const sts = Calc.safeToSpend();
+            const stsEl = document.getElementById('safe-to-spend');
+            if (stsEl) Num.tween(stsEl, sts, (v) => Fmt.money(v), 0.6);
+            const health = Calc.pulseHealth();
+            const pulseEl = document.getElementById('pulse-indicator');
+            if (pulseEl) {
+                pulseEl.className = 'pulse-indicator health-' + health;
+                const labels = { critical: 'Critical', caution: 'Caution', healthy: 'Healthy', thriving: 'Thriving' };
+                const statusEl = document.getElementById('pulse-status');
+                if (statusEl) statusEl.textContent = labels[health];
+            }
 
             // Recurring summary
             const recSum = document.getElementById('recurring-summary');
