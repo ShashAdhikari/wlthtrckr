@@ -2,6 +2,16 @@
 
 This guide provides step-by-step instructions to implement the security fixes identified in the audit report.
 
+> **⚠️ CORRECTION (2026-07-13):** Any `integrity="sha384-…"` values shown *inside
+> this guide* are **illustrative placeholders and are NOT valid** — do not paste
+> them into HTML (they will cause the browser to block the script). The real,
+> verified SRI hashes and the actual Phase 1 implementation are documented in
+> **`PHASE1_QA_UAT.md`**, and are already applied in `index.html`.
+>
+> **Phase 1 status: ✅ IMPLEMENTED** (pinning + SRI + single CDN, CSP tightening,
+> and 10 MB import size limits). See `PHASE1_QA_UAT.md` for the QA results and the
+> UAT checklist. Phases 2–3 below remain proposals pending a decision.
+
 ---
 
 ## Phase 1: Quick Wins (Recommended - Implement First)

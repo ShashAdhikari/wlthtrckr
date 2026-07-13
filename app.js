@@ -11,6 +11,13 @@
     const hasChart = () => typeof window.Chart !== 'undefined';
     const hasXLSX  = () => typeof window.XLSX !== 'undefined';
 
+    // Cap the size of any file the user hands us (CSV/Excel import, JSON restore).
+    // Large files are parsed synchronously on the main thread and would freeze the
+    // tab; this bounds that cost and rejects obviously-wrong uploads early.
+    const MAX_IMPORT_MB = 10;
+    const MAX_IMPORT_BYTES = MAX_IMPORT_MB * 1024 * 1024;
+    const tooLarge = (file) => file && typeof file.size === 'number' && file.size > MAX_IMPORT_BYTES;
+
     // ==================== STORE ====================
     const Store = {
         data: {
@@ -1000,6 +1007,7 @@
         },
 
         handle(file) {
+            if (tooLarge(file)) { this.result(`File too large — the limit is ${MAX_IMPORT_MB}MB.`, false); Toast.show('File too large'); return; }
             const name = file.name.toLowerCase();
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -1128,6 +1136,7 @@
             Toast.show('Backup downloaded');
         },
         import(file) {
+            if (tooLarge(file)) { Toast.show('Backup file too large', 'error'); return; }
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
