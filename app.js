@@ -18,6 +18,13 @@
     const MAX_IMPORT_BYTES = MAX_IMPORT_MB * 1024 * 1024;
     const tooLarge = (file) => file && typeof file.size === 'number' && file.size > MAX_IMPORT_BYTES;
 
+    // Round a currency amount to whole cents. JS binary floats can't represent most
+    // decimals exactly (0.1 + 0.2 === 0.30000000000000004), and that drift accumulates
+    // across sums/subtractions. We round at money aggregation boundaries so derived
+    // values (net worth, safe-to-spend, etc.) stay penny-accurate. The EPSILON nudge
+    // fixes half-cent cases like 1.005 that would otherwise round down.
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
     // ==================== STORE ====================
     const Store = {
         data: {
@@ -56,20 +63,20 @@
             return t.amount * (this.freqToMonthly[t.frequency] || 0);
         },
 
-        // Recurring monthly totals
+        // Recurring monthly totals (round the aggregate, not each per-item equivalent)
         recurringMonthlyIncome() {
-            return this.sum(Store.data.transactions.filter(t => t.type === 'income' && t.frequency && t.frequency !== 'once'), t => this.monthlyAmount(t));
+            return round2(this.sum(Store.data.transactions.filter(t => t.type === 'income' && t.frequency && t.frequency !== 'once'), t => this.monthlyAmount(t)));
         },
         recurringMonthlyExpenses() {
-            return this.sum(Store.data.transactions.filter(t => t.type === 'expense' && t.frequency && t.frequency !== 'once'), t => this.monthlyAmount(t));
+            return round2(this.sum(Store.data.transactions.filter(t => t.type === 'expense' && t.frequency && t.frequency !== 'once'), t => this.monthlyAmount(t)));
         },
 
-        totalIncome()  { return this.sum(Store.data.transactions.filter(t => t.type === 'income'),  t => t.amount); },
-        totalExpenses(){ return this.sum(Store.data.transactions.filter(t => t.type === 'expense'), t => t.amount); },
-        liquidCash()   { return this.totalIncome() - this.totalExpenses(); },
-        totalInvestments() { return this.sum(Store.data.investments, i => i.value); },
-        totalDebt()    { return this.sum(Store.data.debts, d => d.balance); },
-        netWorth()     { return this.liquidCash() + this.totalInvestments() - this.totalDebt(); },
+        totalIncome()  { return round2(this.sum(Store.data.transactions.filter(t => t.type === 'income'),  t => t.amount)); },
+        totalExpenses(){ return round2(this.sum(Store.data.transactions.filter(t => t.type === 'expense'), t => t.amount)); },
+        liquidCash()   { return round2(this.totalIncome() - this.totalExpenses()); },
+        totalInvestments() { return round2(this.sum(Store.data.investments, i => i.value)); },
+        totalDebt()    { return round2(this.sum(Store.data.debts, d => d.balance)); },
+        netWorth()     { return round2(this.liquidCash() + this.totalInvestments() - this.totalDebt()); },
 
         inMonth(dateStr, y, m) {
             const d = new Date(dateStr);
@@ -77,27 +84,27 @@
         },
         // One-time transactions in a specific month (excludes recurring)
         monthIncomeOneTime(y, m) {
-            return this.sum(Store.data.transactions.filter(t => t.type === 'income' && (!t.frequency || t.frequency === 'once') && this.inMonth(t.date, y, m)), t => t.amount);
+            return round2(this.sum(Store.data.transactions.filter(t => t.type === 'income' && (!t.frequency || t.frequency === 'once') && this.inMonth(t.date, y, m)), t => t.amount));
         },
         monthExpensesOneTime(y, m) {
-            return this.sum(Store.data.transactions.filter(t => t.type === 'expense' && (!t.frequency || t.frequency === 'once') && this.inMonth(t.date, y, m)), t => t.amount);
+            return round2(this.sum(Store.data.transactions.filter(t => t.type === 'expense' && (!t.frequency || t.frequency === 'once') && this.inMonth(t.date, y, m)), t => t.amount));
         },
         // Legacy: all transactions by date (for historical charts)
         monthIncome(y, m) {
-            return this.sum(Store.data.transactions.filter(t => t.type === 'income' && this.inMonth(t.date, y, m)), t => t.amount);
+            return round2(this.sum(Store.data.transactions.filter(t => t.type === 'income' && this.inMonth(t.date, y, m)), t => t.amount));
         },
         monthExpenses(y, m) {
-            return this.sum(Store.data.transactions.filter(t => t.type === 'expense' && this.inMonth(t.date, y, m)), t => t.amount);
+            return round2(this.sum(Store.data.transactions.filter(t => t.type === 'expense' && this.inMonth(t.date, y, m)), t => t.amount));
         },
 
         // Current month: one-time + recurring monthly equivalent
         currentMonthIncome() {
             const n = new Date();
-            return this.monthIncomeOneTime(n.getFullYear(), n.getMonth()) + this.recurringMonthlyIncome();
+            return round2(this.monthIncomeOneTime(n.getFullYear(), n.getMonth()) + this.recurringMonthlyIncome());
         },
         currentMonthExpenses() {
             const n = new Date();
-            return this.monthExpensesOneTime(n.getFullYear(), n.getMonth()) + this.recurringMonthlyExpenses();
+            return round2(this.monthExpensesOneTime(n.getFullYear(), n.getMonth()) + this.recurringMonthlyExpenses());
         },
 
         savingsRate() {
@@ -205,7 +212,7 @@
         },
 
         safeToSpend() {
-            return this.recurringMonthlyIncome() - this.recurringMonthlyExpenses();
+            return round2(this.recurringMonthlyIncome() - this.recurringMonthlyExpenses());
         },
 
         pulseHealth() {
