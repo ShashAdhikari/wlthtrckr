@@ -6,7 +6,7 @@
     <title>WLTH — Wealth Intelligence Dashboard</title>
 
     <!-- Security & SEO -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
     <meta name="description" content="WLTH — A modern wealth intelligence platform. Track income, expenses, debt and investments, calculate net worth, and visualize your financial trajectory.">
     <meta name="theme-color" content="#0a0a0f">
 
@@ -53,6 +53,10 @@
                 <a href="#transactions" class="nav-link"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></span><span>Activity</span></a>
             </div>
             <div class="nav-actions">
+                <button class="btn-secondary btn-budget-toggle" id="budget-toggle" aria-pressed="false">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>
+                    <span class="budget-toggle-label">Budget</span>
+                </button>
                 <button class="btn-icon" id="theme-toggle" aria-label="Toggle theme">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>
                 </button>
@@ -110,6 +114,28 @@
             </div>
             <div class="hero-visual" id="hero-3d"></div>
             <div class="scroll-indicator"><div class="mouse"><div class="wheel"></div></div><span>Scroll to explore</span></div>
+        </section>
+
+        <!-- Pulse health + Safe-to-Spend (directly below Total Net Worth) -->
+        <section class="pulse-band" id="pulse-band" aria-label="Financial health and safe-to-spend">
+            <div class="pulse-section glass">
+                <div class="pulse-left">
+                    <div class="pulse-status-box">
+                        <div class="pulse-indicator health-thriving" id="pulse-indicator"></div>
+                        <div class="pulse-text">
+                            <span class="pulse-label">Financial Health</span>
+                            <span class="pulse-status" id="pulse-status">Thriving</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="pulse-right">
+                    <div class="safe-to-spend-box">
+                        <span class="sts-label">Safe-to-Spend This Month</span>
+                        <span class="sts-value"><span class="currency" id="sts-symbol">$</span><span id="safe-to-spend">0</span></span>
+                        <p class="sts-hint">Your recurring surplus minus what you've already spent this month.</p>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Financial Overview -->
@@ -286,6 +312,26 @@
             </div>
         </section>
 
+        <!-- Budget Mode (separate screen, toggled from nav) -->
+        <section class="budget-screen" id="budget-screen" hidden>
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Budget</h2>
+                    <span class="section-sub">Set a monthly budget per category and track it against this month's spending.</span>
+                </div>
+                <button class="btn-secondary" id="budget-back">← Back to Dashboard</button>
+            </div>
+
+            <!-- Summary card on top -->
+            <div class="budget-summary glass" id="budget-summary"></div>
+
+            <!-- Budget vs actuals comparison -->
+            <div class="budget-list-header">
+                <h3>Budget vs. Actual — This Month</h3>
+            </div>
+            <div class="budget-list" id="budget-list"></div>
+        </section>
+
         <footer class="footer">
             <div class="footer-content">
                 <div class="footer-brand"><span class="brand-icon">◆</span><span>WLTH</span></div>
@@ -422,12 +468,13 @@
     <!-- Keyboard hint (desktop only) -->
     <div class="press-hint">Press <kbd>?</kbd> for shortcuts</div>
 
-    <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Scripts: pinned versions, single CDN (jsDelivr), Subresource Integrity enforced.
+         SRI hashes are sha384 of the exact npm-published files jsDelivr serves. -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/gsap.min.js" integrity="sha384-d+vyQ0dYcymoP8ndq2hW7FGC50nqGdXUEgoOUGxbbkAJwZqL7h+jKN0GGgn9hFDS" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/ScrollTrigger.min.js" integrity="sha384-poC0r6usQOX2Ayt/VGA+t81H6V3iN9L+Irz9iO8o+s0X20tLpzc9DOOtnKxhaQSE" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js" integrity="sha384-G436+Z2nlA8+PNoeRvWdxKbvOf8E/y+lYxqht2iBwNHTQDV5CJr3+AGVj8fGZi5t" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="app.js"></script>
 </body>
 </html>
