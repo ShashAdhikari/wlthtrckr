@@ -31,15 +31,24 @@
             transactions: parse('wlth_transactions', []), // {id,description,amount,category,date,type}
             investments:  parse('wlth_investments', []),  // {id,name,value,assetType,date}
             debts:        parse('wlth_debts', []),         // {id,name,balance,rate,minimum,debtType,date}
+            budgets:      parse('wlth_budgets', {}),       // { category: monthlyAmount }
             currency: localStorage.getItem('wlth_currency') || 'USD',
             theme: localStorage.getItem('wlth_theme') || 'dark'
         },
         save(key) { localStorage.setItem('wlth_' + key, JSON.stringify(this.data[key])); },
-        saveAll() { ['transactions','investments','debts'].forEach(k => this.save(k)); },
+        saveAll() { ['transactions','investments','debts','budgets'].forEach(k => this.save(k)); },
         add(key, record) { this.data[key].push(record); this.save(key); },
         remove(key, id) { this.data[key] = this.data[key].filter(r => r.id !== id); this.save(key); },
+        // Set (or clear, when amount<=0) a category's monthly budget.
+        setBudget(cat, amount) {
+            const n = Number(amount);
+            if (!cat) return;
+            if (!n || n <= 0) delete this.data.budgets[cat];
+            else this.data.budgets[cat] = round2(n);
+            this.save('budgets');
+        },
         clear() {
-            this.data.transactions = []; this.data.investments = []; this.data.debts = [];
+            this.data.transactions = []; this.data.investments = []; this.data.debts = []; this.data.budgets = {};
             this.saveAll();
         }
     };
@@ -211,8 +220,13 @@
             return ((curr - prev) / Math.abs(prev)) * 100;
         },
 
+        // "Safe to spend" this month: your recurring surplus (recurring income minus
+        // recurring bills) is the monthly budget, and every one-time expense you log
+        // this month eats into it. This reacts to ordinary (non-recurring) expenses.
         safeToSpend() {
-            return round2(this.recurringMonthlyIncome() - this.recurringMonthlyExpenses());
+            const now = new Date();
+            const oneTimeSpend = this.monthExpensesOneTime(now.getFullYear(), now.getMonth());
+            return round2(this.recurringMonthlyIncome() - this.recurringMonthlyExpenses() - oneTimeSpend);
         },
 
         pulseHealth() {
@@ -223,6 +237,44 @@
             if (runway < 3) return 'caution';
             if (runway < 6) return 'healthy';
             return 'thriving';
+        },
+
+        // ---- Budget ----
+        // Expense categories budgets are tracked against. Mirrors the expense modal's
+        // category set so budgets and expense types line up (income-only 'salary' omitted).
+        budgetCategories() {
+            return ['housing', 'food', 'transport', 'utilities', 'entertainment', 'healthcare', 'shopping', 'business', 'other'];
+        },
+
+        // Actual spend for a category THIS month: one-time expenses dated this month plus
+        // the monthly-equivalent of any recurring expenses in that category.
+        currentMonthExpenseByCategory(cat) {
+            const now = new Date();
+            const y = now.getFullYear(), m = now.getMonth();
+            const oneTime = this.sum(Store.data.transactions.filter(t =>
+                t.type === 'expense' && t.category === cat &&
+                (!t.frequency || t.frequency === 'once') && this.inMonth(t.date, y, m)), t => t.amount);
+            const recurring = this.sum(Store.data.transactions.filter(t =>
+                t.type === 'expense' && t.category === cat &&
+                t.frequency && t.frequency !== 'once'), t => this.monthlyAmount(t));
+            return round2(oneTime + recurring);
+        },
+
+        // Roll-up of budgeted vs actual across all categories for the current month.
+        budgetSummary() {
+            const cats = this.budgetCategories();
+            let budgeted = 0, actual = 0, overCount = 0;
+            cats.forEach(cat => {
+                const b = Number(Store.data.budgets[cat]) || 0;
+                const a = this.currentMonthExpenseByCategory(cat);
+                budgeted += b;
+                actual += a;
+                if (b > 0 && a > b) overCount++;
+            });
+            budgeted = round2(budgeted); actual = round2(actual);
+            const remaining = round2(budgeted - actual);
+            const pctUsed = budgeted > 0 ? Math.round((actual / budgeted) * 100) : 0;
+            return { budgeted, actual, remaining, pctUsed, overCount };
         }
     };
 
@@ -1159,6 +1211,90 @@
         }
     };
 
+    // ==================== BUDGET ====================
+    const Budget = {
+        // Attach listeners once. Toggle buttons switch the whole screen; the list uses a
+        // delegated input handler so per-row budget inputs persist as the user types.
+        init() {
+            const toggle = document.getElementById('budget-toggle');
+            if (toggle) toggle.addEventListener('click', () => UI.toggleBudgetMode());
+            const back = document.getElementById('budget-back');
+            if (back) back.addEventListener('click', () => UI.toggleBudgetMode(false));
+            const list = document.getElementById('budget-list');
+            if (list) list.addEventListener('input', (e) => {
+                const inp = e.target.closest('[data-budget-cat]');
+                if (!inp) return;
+                Store.setBudget(inp.dataset.budgetCat, inp.value);
+                this.render(); // recompute summary + bars; keep focus on the edited field
+                const again = document.querySelector(`[data-budget-cat="${inp.dataset.budgetCat}"]`);
+                if (again) { again.focus(); const v = again.value; again.value = ''; again.value = v; }
+            });
+        },
+
+        render() {
+            const summary = document.getElementById('budget-summary');
+            const list = document.getElementById('budget-list');
+            if (!summary || !list) return;
+            const s = Calc.budgetSummary();
+
+            // Summary card on top: budgeted vs actual, remaining, % used, status.
+            const overBudget = s.budgeted > 0 && s.actual > s.budgeted;
+            const statusClass = s.budgeted === 0 ? 'neutral' : (overBudget ? 'over' : (s.pctUsed >= 80 ? 'warn' : 'good'));
+            const statusText = s.budgeted === 0 ? 'No budgets set'
+                : (overBudget ? `Over budget by ${Fmt.money(s.actual - s.budgeted)}`
+                : `${Fmt.money(s.remaining)} left this month`);
+            summary.className = 'budget-summary glass status-' + statusClass;
+            summary.innerHTML = `
+                <div class="bsum-main">
+                    <span class="bsum-label">Spent of Budget · This Month</span>
+                    <div class="bsum-figures">
+                        <span class="bsum-actual">${Fmt.money(s.actual)}</span>
+                        <span class="bsum-of">of</span>
+                        <span class="bsum-budgeted">${Fmt.money(s.budgeted)}</span>
+                    </div>
+                    <div class="bsum-bar"><div class="bsum-fill" style="width:${Math.min(100, s.pctUsed)}%"></div></div>
+                    <span class="bsum-status">${escapeHtml(statusText)}</span>
+                </div>
+                <div class="bsum-stats">
+                    <div class="bsum-stat"><span class="bsum-stat-label">Budgeted</span><span class="bsum-stat-value">${Fmt.money(s.budgeted)}</span></div>
+                    <div class="bsum-stat"><span class="bsum-stat-label">Actual</span><span class="bsum-stat-value">${Fmt.money(s.actual)}</span></div>
+                    <div class="bsum-stat"><span class="bsum-stat-label">Remaining</span><span class="bsum-stat-value ${s.remaining < 0 ? 'negative' : 'positive'}">${Fmt.money(s.remaining)}</span></div>
+                    <div class="bsum-stat"><span class="bsum-stat-label">Used</span><span class="bsum-stat-value">${s.pctUsed}%</span></div>
+                </div>`;
+
+            // Comparison rows — one per expense category.
+            list.innerHTML = Calc.budgetCategories().map(cat => {
+                const icon = CAT_ICON[cat] || '📦';
+                const budget = Number(Store.data.budgets[cat]) || 0;
+                const actual = Calc.currentMonthExpenseByCategory(cat);
+                const pct = budget > 0 ? Math.round((actual / budget) * 100) : 0;
+                const over = budget > 0 && actual > budget;
+                const remaining = round2(budget - actual);
+                const fillPct = budget > 0 ? Math.min(100, pct) : 0;
+                const barClass = over ? 'over' : (pct >= 80 ? 'warn' : 'good');
+                const rightMeta = budget > 0
+                    ? `<span class="brow-remaining ${remaining < 0 ? 'negative' : 'positive'}">${over ? Fmt.money(actual - budget) + ' over' : Fmt.money(remaining) + ' left'}</span>`
+                    : `<span class="brow-remaining muted">No budget set</span>`;
+                return `<div class="budget-row glass${over ? ' is-over' : ''}">
+                    <div class="brow-icon">${icon}</div>
+                    <div class="brow-main">
+                        <div class="brow-top">
+                            <span class="brow-name">${escapeHtml(capitalize(cat))}</span>
+                            <span class="brow-actual">${Fmt.money(actual)}${budget > 0 ? ` / ${Fmt.money(budget)}` : ''}</span>
+                        </div>
+                        <div class="brow-bar"><div class="brow-fill ${barClass}" style="width:${fillPct}%"></div></div>
+                        <div class="brow-bottom">${rightMeta}${budget > 0 ? `<span class="brow-pct">${pct}%</span>` : ''}</div>
+                    </div>
+                    <div class="brow-input">
+                        <span class="brow-input-sym">${Fmt.symbol()}</span>
+                        <input type="number" min="0" step="1" inputmode="decimal" placeholder="0"
+                               data-budget-cat="${cat}" value="${budget > 0 ? budget : ''}" aria-label="Monthly budget for ${escapeHtml(cat)}">
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    };
+
     // ==================== DEMO DATA ====================
     const Demo = {
         load() {
@@ -1221,11 +1357,30 @@
             this.wireDelegated();
             this.wireData();
             Upload.init();
+            Budget.init();
             this.refresh();
+        },
+
+        // Switch between the dashboard and the full-screen Budget view. Pass a boolean to
+        // force a state, or omit to toggle.
+        toggleBudgetMode(force) {
+            const on = typeof force === 'boolean' ? force : !document.body.classList.contains('budget-mode');
+            document.body.classList.toggle('budget-mode', on);
+            const screen = document.getElementById('budget-screen');
+            if (screen) screen.hidden = !on;
+            const btn = document.getElementById('budget-toggle');
+            if (btn) {
+                btn.setAttribute('aria-pressed', String(on));
+                btn.classList.toggle('active', on);
+                const label = btn.querySelector('.budget-toggle-label');
+                if (label) label.textContent = on ? 'Dashboard' : 'Budget';
+            }
+            if (on) { Budget.render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
         },
 
         refresh() {
             this.renderHero();
+            this.renderPulse();
             this.renderStats();
             this.renderVelocity();
             this.renderAssets(true);
@@ -1234,6 +1389,7 @@
             this.renderTransactions(true);
             Ticker.render();
             Charts.renderAll();
+            if (Budget && Budget.render) Budget.render();
         },
 
         // ---------- HERO ----------
@@ -1289,6 +1445,25 @@
             const td = document.getElementById('trend-debt'); if (td) td.innerHTML = '';
         },
 
+        // ---------- PULSE + SAFE-TO-SPEND ----------
+        renderPulse() {
+            // Safe-to-Spend: the markup carries its own currency symbol (#sts-symbol),
+            // so the number is formatted WITHOUT a symbol to avoid a double "$$". The
+            // sign lives on the symbol span, mirroring the net-worth display.
+            const sts = Calc.safeToSpend();
+            const sym = document.getElementById('sts-symbol');
+            if (sym) sym.textContent = (sts < 0 ? '-' : '') + Fmt.symbol();
+            const stsEl = document.getElementById('safe-to-spend');
+            if (stsEl) Num.tween(stsEl, Math.abs(sts), (x) => Math.round(x).toLocaleString('en-US'), 0.6);
+
+            const health = Calc.pulseHealth();
+            const pulseEl = document.getElementById('pulse-indicator');
+            if (pulseEl) pulseEl.className = 'pulse-indicator health-' + health;
+            const labels = { critical: 'Critical', caution: 'Caution', healthy: 'Healthy', thriving: 'Thriving' };
+            const statusEl = document.getElementById('pulse-status');
+            if (statusEl) statusEl.textContent = labels[health];
+        },
+
         // ---------- VELOCITY ----------
         renderVelocity() {
             const v = Calc.velocity();
@@ -1303,19 +1478,6 @@
 
             const netEl = document.getElementById('vel-net-day');
             if (netEl) netEl.style.color = v.netPerDay >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
-
-            // Safe-to-Spend & Pulse
-            const sts = Calc.safeToSpend();
-            const stsEl = document.getElementById('safe-to-spend');
-            if (stsEl) Num.tween(stsEl, sts, (v) => Fmt.money(v), 0.6);
-            const health = Calc.pulseHealth();
-            const pulseEl = document.getElementById('pulse-indicator');
-            if (pulseEl) {
-                pulseEl.className = 'pulse-indicator health-' + health;
-                const labels = { critical: 'Critical', caution: 'Caution', healthy: 'Healthy', thriving: 'Thriving' };
-                const statusEl = document.getElementById('pulse-status');
-                if (statusEl) statusEl.textContent = labels[health];
-            }
 
             // Recurring summary
             const recSum = document.getElementById('recurring-summary');
